@@ -34,7 +34,7 @@ REKLAMA_MSG = [
 
 # Для подключения бота к локальному серверу
 # bot.log_out()
-telebot.apihelper.API_URL = "http://localhost:8081/bot{0}/{1}"
+telebot.apihelper.API_URL = "http://localhost:4200/bot{0}/{1}"
 telebot.apihelper.READ_TIMEOUT = 5 * 60
 
 inline_btn_1 = InlineKeyboardButton(
