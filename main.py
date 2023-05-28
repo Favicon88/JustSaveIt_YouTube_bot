@@ -32,6 +32,11 @@ REKLAMA_MSG = [
     "🔥 Если думаешь купить или продать криптовалюту, рекомендую <a href='https://cutt.ly/87rsjAV'>Binance</a>",
 ]
 
+# Для подключения бота к локальному серверу
+# bot.log_out()
+telebot.apihelper.API_URL = "http://localhost:8081/bot{0}/{1}"
+telebot.apihelper.READ_TIMEOUT = 5 * 60
+
 inline_btn_1 = InlineKeyboardButton(
     text="Скачать Видео", callback_data="video"
 )
@@ -142,7 +147,7 @@ def download_video(message, url, audio=False):
                     if (
                         datetime.datetime.now()
                         - last_edited[f"{message.chat.id}-{msg.message_id}"]
-                    ).total_seconds() >= 5:
+                    ).total_seconds() >= 3:
                         update = True
                 else:
                     update = True
@@ -203,16 +208,17 @@ def download_video(message, url, audio=False):
                             info["requested_downloads"][0]["filepath"],
                             "rb",
                         ),
+                        supports_streaming=True,
                     )
                 bot.delete_message(message.chat.id, msg.message_id)
             except Exception as e:
-                print(e)
                 bot.edit_message_text(
                     chat_id=message.chat.id,
                     message_id=msg.message_id,
                     text=f"Не удалось отправить файл, удостоверьтесь что файл поддерживается Telegram и не превышает *{round(max_filesize / 1000000)}МБ*",
                     parse_mode="MARKDOWN",
                 )
+                bot.delete_message(message.chat.id, msg.message_id)
             else:
                 for file in info["requested_downloads"]:
                     os.remove(file["filepath"])
