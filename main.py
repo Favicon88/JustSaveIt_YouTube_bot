@@ -2,24 +2,48 @@ from dotenv import dotenv_values
 import random
 import sqlite3
 import telebot
+from telebot.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    CallbackQuery,
+)
 from requests.exceptions import ReadTimeout
 import json
+from urllib.parse import urlparse
 import yt_dlp
+import datetime
+import re
+import os
 
 
 env = {
-    **dotenv_values("/home/ChatGPT_telegram_bot/.env.prod"),
+    **dotenv_values("/home/JustSaveIt_YouTube_bot/.env.prod"),
     **dotenv_values(".env.dev"),  # override
 }
 
 bot = telebot.TeleBot(env["TG_BOT_TOKEN"])
 db_link = env["DB_LINK"]
+max_filesize = int(env["max_filesize"])
+last_edited = {}
 
 REKLAMA_MSG = [
-    "🔥 Валютный вклад для россиян (до 12% годовых) https://crypto-fans.club",
-    "🔥 Если думаешь купить или продать криптовалюту, рекомендую Bybit https://cutt.ly/D7rsbVG",
-    "🔥 Если думаешь купить или продать криптовалюту, рекомендую Binance https://cutt.ly/87rsjAV",
+    "🔥 Валютный вклад для россиян (до 12% годовых) <a href='https://crypto-fans.club'>crypto-fans.club</a>",
+    "🔥 Если думаешь купить или продать криптовалюту, рекомендую <a href='https://cutt.ly/D7rsbVG'>Bybit</a>",
+    "🔥 Если думаешь купить или продать криптовалюту, рекомендую <a href='https://cutt.ly/87rsjAV'>Binance</a>",
 ]
+
+inline_btn_1 = InlineKeyboardButton(
+    text="Скачать Видео", callback_data="video"
+)
+inline_btn_2 = InlineKeyboardButton(
+    text="Скачать Аудио", callback_data="audio"
+)
+keyboard = InlineKeyboardMarkup(
+    keyboard=[
+        [inline_btn_1, inline_btn_2],
+    ],
+    row_width=1,
+)
 
 
 def write_to_db(message):
@@ -72,19 +96,6 @@ def write_to_db(message):
     conn.close()
 
 
-def make_request(message, api_key_numb):
-    chance = random.choices((0, 1, 2, 3, 4, 5, 6, 7, 8, 9))
-    try:
-        bot.send_message(message.chat.id, piece_of_answer)
-        if chance == [1]:
-            bot.send_message(message.chat.id, random.choices(REKLAMA_MSG))
-    except ReadTimeout:
-        bot.send_message(
-            message.chat.id,
-            "ChatGPT в данный момент перегружен запросами, пожалуйста повторите свой запрос чуть позже.",
-        )
-
-
 def create_table():
     """Create table if not exists."""
 
@@ -107,41 +118,204 @@ def create_table():
     conn.close()
 
 
-@bot.message_handler(commands=["start"])
+def youtube_url_validation(url):
+    youtube_regex = (
+        r"(https?://)?(www\.)?"
+        "(youtube|youtu|youtube-nocookie)\.(com|be)/"
+        "(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})"
+    )
+
+    youtube_regex_match = re.match(youtube_regex, url)
+    if youtube_regex_match:
+        return youtube_regex_match
+
+    return youtube_regex_match
+
+
+def download_video(message, url, audio=False):
+    def progress(d):
+        if d["status"] == "downloading":
+            try:
+                update = False
+
+                if last_edited.get(f"{message.chat.id}-{msg.message_id}"):
+                    if (
+                        datetime.datetime.now()
+                        - last_edited[f"{message.chat.id}-{msg.message_id}"]
+                    ).total_seconds() >= 5:
+                        update = True
+                else:
+                    update = True
+
+                if update:
+                    perc = round(
+                        d["downloaded_bytes"] * 100 / d["total_bytes"]
+                    )
+                    bot.edit_message_text(
+                        chat_id=message.chat.id,
+                        message_id=msg.message_id,
+                        text=f"Скачивание {d['info_dict']['title']}\n\n{perc}%",
+                    )
+                    last_edited[
+                        f"{message.chat.id}-{msg.message_id}"
+                    ] = datetime.datetime.now()
+            except Exception as e:
+                print(e)
+
+    msg = bot.reply_to(message, "Скачивание...")
+    with yt_dlp.YoutubeDL(
+        {
+            "format": "mp4",
+            "outtmpl": "outputs/%(title)s.%(ext)s",
+            "progress_hooks": [progress],
+            "postprocessors": [
+                {  # Extract audio using ffmpeg
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                }
+            ]
+            if audio
+            else [],
+            "max_filesize": max_filesize,
+        }
+    ) as ydl:
+        try:
+            info = ydl.extract_info(url, download=True)
+
+            bot.edit_message_text(
+                chat_id=message.chat.id,
+                message_id=msg.message_id,
+                text="Отправка файла в Telegram...",
+            )
+            try:
+                if audio:
+                    bot.send_audio(
+                        message.chat.id,
+                        open(
+                            info["requested_downloads"][0]["filepath"],
+                            "rb",
+                        ),
+                    )
+                else:
+                    bot.send_video(
+                        message.chat.id,
+                        open(
+                            info["requested_downloads"][0]["filepath"],
+                            "rb",
+                        ),
+                    )
+                bot.delete_message(message.chat.id, msg.message_id)
+            except Exception as e:
+                print(e)
+                bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=msg.message_id,
+                    text=f"Не удалось отправить файл, удостоверьтесь что файл поддерживается Telegram и не превышает *{round(max_filesize / 1000000)}МБ*",
+                    parse_mode="MARKDOWN",
+                )
+            else:
+                for file in info["requested_downloads"]:
+                    os.remove(file["filepath"])
+        except Exception as e:
+            print(e)
+            if isinstance(e, yt_dlp.utils.DownloadError):
+                bot.edit_message_text(
+                    "Неверный URL", message.chat.id, msg.message_id
+                )
+            else:
+                bot.edit_message_text(
+                    "Произошла ошибка при скачивании Вашего видео",
+                    message.chat.id,
+                    msg.message_id,
+                )
+
+
+@bot.message_handler(commands=["start", "help"])
 def send_start(message):
-    text = """Приветствую ✌
+    if message.text == "/start":
+        text = """Приветствую ✌
 
-Я - ChatGPT, крупнейшая языковая модель, созданная OpenAI. 
+При помощи этого бота вы сможете скачивать с YouTube.
 
-Я разработана для обработки естественного языка и могу помочь вам ответить на вопросы, 
-обсудить темы или предоставить информацию на различные темы.
+/help - О боте
 
-🔥В том числе на русском языке....🔥
+👇Отправь ссылку и получи свой файл.👇
+"""
+    elif message.text == "/help":
+        text = """🔥 JustSaveIt_YouTube может скачать для вас видео ролики и аудио из YouTube.
 
-👇Я постараюсь ответить на твои вопросы👇
+Как пользоваться:
+  1. Зайдите в YouTube.
+  2. Выберите интересное для вас видео.
+  3. Скопируйте ссылку на видео.
+  4. Отправьте нашему боту и получите ваш файл!
 """
     write_to_db(message)
     bot.send_message(message.chat.id, text)
 
 
+@bot.callback_query_handler(func=lambda call: call.data == "video")
+def download_video_command(call: CallbackQuery):
+    text = call.message.reply_to_message.html_text
+    if not text:
+        bot.reply_to(
+            call.message,
+            "Invalid usage, use `/download url`",
+            parse_mode="MARKDOWN",
+        )
+        return
+
+    download_video(call.message.reply_to_message, text)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "audio")
+def download_audio_command(call: CallbackQuery):
+    text = call.message.reply_to_message.html_text
+    if not text:
+        bot.reply_to(
+            call.message,
+            "Invalid usage, use `/audio url`",
+            parse_mode="MARKDOWN",
+        )
+        return
+
+    download_video(call.message.reply_to_message, text, True)
+
+
 @bot.message_handler(content_types=["text"])
-def send_msg_to_chatgpt(message):
+def download_command(message):
     write_to_db(message)
-    make_request(message, api_key_numb)
+    if not message.text:
+        bot.reply_to(
+            message, "Неверный текст, отправь ссылку", parse_mode="MARKDOWN"
+        )
+        return
+    url = (
+        message.text
+        if message.text
+        else message.caption
+        if message.caption
+        else None
+    )
+    url_info = urlparse(url)
+    if url_info.scheme:
+        if url_info.netloc in [
+            "www.youtube.com",
+            "youtu.be",
+            "youtube.com",
+            "youtu.be",
+        ]:
+            if not youtube_url_validation(url):
+                bot.reply_to(message, "Некорректная ссылка")
+                return
+        bot.reply_to(
+            message,
+            "Выберите формат",
+            reply_markup=keyboard,
+        )
+    else:
+        bot.reply_to(message, "Неверный URL")
 
 
 if __name__ == "__main__":
-    yt_opts = {}
-    url = "https://www.youtube.com/shorts/j-AkzBTmrTs"
-    ydl_opts = {}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        # info = ydl.extract_info(url, download=False)
-        ydl.download(url)
-
-        # ℹ️ ydl.sanitize_info makes the info json-serializable
-        # print(json.dumps(ydl.sanitize_info(info)))
-    # videos = yt.get_videos()
-    # print(yt)
-    # key_end = False
-    # create_table()
-    # target = bot.infinity_polling()
+    target = bot.infinity_polling()

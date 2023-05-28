@@ -1,5 +1,6 @@
 
-
+yt-dlp-telegram/
+telegram-bot-api/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
