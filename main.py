@@ -220,8 +220,7 @@ def download_video(message, url, audio=False):
                     text=f"Не удалось отправить файл, удостоверьтесь что файл поддерживается Telegram и не превышает *{round(max_filesize / 1000000)}МБ*",
                     parse_mode="MARKDOWN",
                 )
-                bot.delete_message(message.chat.id, msg.message_id)
-            else:
+            finally:
                 for file in info["requested_downloads"]:
                     os.remove(file["filepath"])
         except Exception as e:
@@ -318,11 +317,14 @@ def download_command(message):
             if not youtube_url_validation(url):
                 bot.reply_to(message, "Некорректная ссылка")
                 return
-        bot.reply_to(
-            message,
-            "Выберите формат",
-            reply_markup=keyboard,
-        )
+
+            bot.reply_to(
+                message,
+                "Выберите формат",
+                reply_markup=keyboard,
+            )
+        else:
+            bot.reply_to(message, "Неверный URL")
     else:
         bot.reply_to(message, "Неверный URL")
 

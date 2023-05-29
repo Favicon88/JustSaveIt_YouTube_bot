@@ -31,4 +31,5 @@ apihelper.API_URL = "http://localhost:4200/bot{0}/{1}"
 systemctl status telegram-local-server.service
 
 systemctl status justsavit-youtube-bot.service
+systemctl restart justsavit-youtube-bot.service
 ```
