@@ -53,6 +53,7 @@ keyboard = InlineKeyboardMarkup(
 
 
 def write_to_db(message):
+    create_table()
     conn = sqlite3.connect(db_link)
     cursor = conn.cursor()
     select_id = cursor.execute(
