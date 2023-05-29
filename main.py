@@ -18,6 +18,7 @@ import os
 
 env = {
     **dotenv_values("/home/JustSaveIt_YouTube_bot/.env.prod"),
+    **dotenv_values(".env.prod"),
     **dotenv_values(".env.dev"),  # override
 }
 
