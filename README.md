@@ -10,6 +10,8 @@
 ```
 ./telegram-bot-api.exe --api-id=1208003 --api-hash=3a1617006097879fcff9f4312eeb692b --http-port=4200
 
+./telegram-bot-api --api-id=1208003 --api-hash=3a1617006097879fcff9f4312eeb692b --http-port=4200
+
 ```
 
 До запуска локального сервера необходимо отвязать бота от сервера телеграм
