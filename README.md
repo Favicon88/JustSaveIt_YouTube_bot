@@ -24,3 +24,11 @@ bot.log_out()
 apihelper.API_URL = "http://localhost:4200/bot{0}/{1}"
 
 ```
+
+команды для сервера
+
+```
+systemctl status telegram-local-server.service
+
+systemctl status justsavit-youtube-bot.service
+```
