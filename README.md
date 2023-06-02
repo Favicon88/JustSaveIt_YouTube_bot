@@ -8,9 +8,9 @@
 Подробнее тут https://github.com/tdlib/telegram-bot-api
 
 ```
-./telegram-bot-api.exe --api-id=1208003 --api-hash=3a1617006097879fcff9f4312eeb692b --http-port=4200
+./telegram-bot-api.exe --api-id=******** --api-hash=******** --http-port=4200
 
-./telegram-bot-api --api-id=1208003 --api-hash=3a1617006097879fcff9f4312eeb692b --http-port=4200
+./telegram-bot-api --api-id=******** --api-hash=******** --http-port=4200
 
 ```
 

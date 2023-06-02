@@ -187,6 +187,14 @@ def download_video(message, url, audio=False):
         }
     ) as ydl:
         try:
+            info = ydl.extract_info(url, download=False)
+            if info.get("live_status") == "is_live":
+                bot.edit_message_text(
+                chat_id=message.chat.id,
+                message_id=msg.message_id,
+                text="Невозможно скачать живой стрим, неверная ссылка...",
+                )
+                return
             info = ydl.extract_info(url, download=True)
 
             bot.edit_message_text(
